@@ -2,6 +2,9 @@ import express from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
 import usersRouter from "./router/users";
+import todosRouter from "./router/todos";
+import feedsRouter from "./router/feeds";
+import followsRouter from "./router/follows";
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -14,3 +17,6 @@ const PORT = 5000;
 app.listen(PORT, () => console.log(`Server running on port: ${PORT}`));
 
 app.use("/users", usersRouter);
+app.use("/todos", todosRouter);
+app.use("/feeds", feedsRouter);
+app.use("/follows", followsRouter);

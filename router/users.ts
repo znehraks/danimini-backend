@@ -3,22 +3,15 @@ const router = express.Router();
 import { pool } from "../connection";
 import bcrypt, { genSalt } from "bcrypt";
 import { uuid } from "uuidv4";
-import { FieldPacket, RowDataPacket } from "mysql2";
+import { FieldPacket } from "mysql2";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import path from "path";
-import { verifyToken } from "../utils";
+import { getVerifiedUser, verifyToken } from "../utils";
+import { TEntierUserRows } from "../interfaces";
 dotenv.config({ path: `${path.resolve()}/.env` });
 
 const JWT_SECRET_KEY = process.env.JWT_SECRET_KEY as string;
-
-interface IUser extends RowDataPacket {
-  user_id: string;
-  user_email: string;
-  user_password: string;
-  created_at: string;
-  updated_at: string;
-}
 
 const saltRounds = 10;
 
@@ -29,12 +22,51 @@ router.get("/", verifyToken, async (req, res) => {
   res.send(rows);
 });
 
+router.get("/me", verifyToken, async (req, res) => {
+  const connection = await pool.getConnection();
+  const id = await getVerifiedUser(req);
+  const [rows] = await connection.execute(
+    `SELECT * FROM users WHERE user_id='${id}'`
+  );
+  console.log(rows);
+  res.send(rows);
+});
+
+router.get("/following", verifyToken, async (req, res) => {
+  const connection = await pool.getConnection();
+  const id = await getVerifiedUser(req);
+  const [rows] = await connection.execute(
+    `SELECT * FROM users 
+        WHERE user_id = '${id}'
+        OR(
+          user_id IN (SELECT following_id FROM FOLLOWS 
+        WHERE follower_id = '${id}'))  
+        `
+  );
+  console.log(rows);
+  res.send(rows);
+});
+
+router.get("/follower", verifyToken, async (req, res) => {
+  const connection = await pool.getConnection();
+  const id = await getVerifiedUser(req);
+  const [rows] = await connection.execute(
+    `SELECT * FROM users WHERE(
+          user_id IN (SELECT follower_id FROM FOLLOWS 
+        WHERE following_id = '${id}')
+        )  
+        `
+  );
+  console.log(rows);
+  res.send(rows);
+});
+
 router.post("/register", async (req, res) => {
   console.log(req.body);
   const { email, password: rawPassword } = req.body;
   // 아이디 중복 확인
   const connection = await pool.getConnection();
-  const [alreadyExistUsers]: [IUser[], FieldPacket[]] =
+  const [alreadyExistUsers]: [TEntierUserRows[], FieldPacket[]] =
     await connection.execute(
       `SELECT user_email FROM users where user_email='${email}'`
     );
@@ -67,9 +99,10 @@ router.post("/login", async (req, res) => {
   const connection = await pool.getConnection();
   try {
     // 아이디 확인
-    const [dbUser]: [IUser[], FieldPacket[]] = await connection.execute(
-      `SELECT user_email, user_password from users WHERE user_email='${email}'`
-    );
+    const [dbUser]: [TEntierUserRows[], FieldPacket[]] =
+      await connection.execute(
+        `SELECT user_email, user_password from users WHERE user_email='${email}'`
+      );
     if (!dbUser) {
       res.send({ errorCode: 1, message: "email is not exist" });
       return;
