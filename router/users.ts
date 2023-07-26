@@ -15,6 +15,48 @@ const JWT_SECRET_KEY = process.env.JWT_SECRET_KEY as string;
 
 const saltRounds = 10;
 
+const getAggregateInfoSQL = (id: string) => {
+  return `SELECT 
+    u.user_id, 
+    u.user_email, 
+    u.user_desc,
+    u.user_avatar,
+    u.created_at AS 'user_created_at',
+    u.updated_at AS 'user_updated_at',
+    t.todo_id,
+    t.todo_title,
+    t.todo_desc,
+    t.todo_point,
+    t.todo_is_finished,
+    t.created_at AS 'todo_created_at',
+    t.updated_at AS 'todo_updated_at',
+    f.feed_id,
+    f.feed_title,
+    f.feed_desc,
+    f.feed_thumb,
+    f.created_at AS 'feed_created_at',
+    f.updated_at AS 'feed_updated_at'
+     FROM users AS u 
+    LEFT JOIN todos AS t
+    ON u.user_id = t.author_id
+    LEFT JOIN feeds AS f
+    ON u.user_id = f.author_id AND t.todo_id = f.todo_id
+    WHERE u.user_id = '${id}'
+    ORDER BY f.created_at DESC;
+
+    SELECT COUNT(feed_id) AS feed_count FROM feeds
+    WHERE author_id = '${id}';
+
+    SELECT COUNT(todo_id) AS todo_count FROM todos
+    WHERE author_id = '${id}';
+
+    SELECT COUNT(id) AS following_count FROM follows
+    WHERE follower_id = '${id}';
+
+    SELECT COUNT(id) AS follower_count FROM follows
+    WHERE following_id = '${id}';`;
+};
+
 router.get("/", verifyToken, async (req, res) => {
   const connection = await pool.getConnection();
   const [rows] = await connection.execute("SELECT * FROM users");
@@ -24,41 +66,96 @@ router.get("/", verifyToken, async (req, res) => {
 
 router.get("/me", verifyToken, async (req, res) => {
   const connection = await pool.getConnection();
-  const id = await getVerifiedUser(req);
-  const [rows] = await connection.execute(
-    `SELECT * FROM users WHERE user_id='${id}'`
-  );
-  console.log(rows);
-  res.send(rows);
+
+  try {
+    const id = await getVerifiedUser(req);
+    if (!id) {
+      res.send({ errorCode: 0 });
+      return;
+    }
+    const [rows] = await connection.query(getAggregateInfoSQL(id));
+
+    console.log("here?");
+
+    const data = {
+      ...rows,
+    };
+    console.log("here?2");
+    res.send(data);
+  } catch (e) {
+    console.log("에러", e);
+    console.log("here?3 =================>");
+    res.send({ errorCode: 1, message: e });
+  }
+});
+
+router.get("/:email", verifyToken, async (req, res) => {
+  const {
+    params: { email },
+  } = req;
+  const connection = await pool.getConnection();
+
+  console.log("야긴가?");
+
+  try {
+    const [targetId] = await connection.query(
+      `SELECT user_id FROM users WHERE user_email = '${email}'`
+    );
+    console.log("targetId", targetId);
+    const [rows] = await connection.query(
+      getAggregateInfoSQL(
+        (targetId as unknown as { user_id: string }[])[0].user_id
+      )
+    );
+
+    console.log("rows", rows);
+
+    console.log("here?");
+
+    const data = {
+      ...rows,
+    };
+    console.log("here?2");
+    console.log("data", data);
+    res.send(data);
+    connection.end();
+  } catch (e) {
+    console.log("에러", e);
+    console.log("here?3 =================>");
+    res.send({ errorCode: 1, message: e });
+  }
 });
 
 router.get("/following", verifyToken, async (req, res) => {
   const connection = await pool.getConnection();
   const id = await getVerifiedUser(req);
-  const [rows] = await connection.execute(
-    `SELECT * FROM users 
-        WHERE user_id = '${id}'
-        OR(
-          user_id IN (SELECT following_id FROM FOLLOWS 
-        WHERE follower_id = '${id}'))  
-        `
-  );
-  console.log(rows);
-  res.send(rows);
+  if (!id) {
+    res.send({ errorCode: 0 });
+    return;
+  }
+  const [rows] = await connection.query(getAggregateInfoSQL(id));
+
+  const data = {
+    ...rows,
+  };
+  console.log(data);
+  res.send(data);
 });
 
 router.get("/follower", verifyToken, async (req, res) => {
   const connection = await pool.getConnection();
   const id = await getVerifiedUser(req);
-  const [rows] = await connection.execute(
-    `SELECT * FROM users WHERE(
-          user_id IN (SELECT follower_id FROM FOLLOWS 
-        WHERE following_id = '${id}')
-        )  
-        `
-  );
-  console.log(rows);
-  res.send(rows);
+  if (!id) {
+    res.send({ errorCode: 0 });
+    return;
+  }
+  const [rows] = await connection.query(getAggregateInfoSQL(id));
+
+  const data = {
+    ...rows,
+  };
+  console.log(data);
+  res.send(data);
 });
 
 router.post("/register", async (req, res) => {
@@ -121,7 +218,7 @@ router.post("/login", async (req, res) => {
           email: dbUser[0].user_email,
         },
         JWT_SECRET_KEY,
-        { expiresIn: "1d" }
+        { expiresIn: "7d" }
       );
       console.log(accessToken);
       res.send({ email: dbUser[0].user_email, accessToken });
