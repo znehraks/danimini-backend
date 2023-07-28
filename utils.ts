@@ -51,9 +51,11 @@ export const getVerifiedUser = async (req: Request) => {
   console.log("here2?");
   console.log("id", id);
   if (id.length === 0) {
+    connection.release();
     return null;
   }
 
   const { user_id } = id[0];
+  connection.release();
   return user_id;
 };

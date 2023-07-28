@@ -54,12 +54,8 @@ router.get("/following", verifyToken, async (req, res) => {
     OR(
     f.author_id IN (SELECT following_id FROM FOLLOWS as fo 
     WHERE fo.follower_id = '${id}'))  
-    ORDER BY f.created_at DESC
-    LIMIT 10
         `
   )) as [rows: RowDataPacket[], fields: FieldPacket[]];
-
-  console.log(rows);
 
   const data: {
     user_email: string;
@@ -104,22 +100,28 @@ router.get("/following", verifyToken, async (req, res) => {
   }[][] = checked.map((item) => {
     return rows
       .filter((r) => r.feed_id === item)
-      .map((mItem) => ({
-        comment_id: mItem.comment_id,
-        comment_content: mItem.comment_content,
-        comment_author_id: mItem.comment_author_id,
-        comment_author_email: mItem.comment_author_email,
-        comment_created_at: mItem.comment_created_at,
-        comment_updated_at: mItem.comment_updated_at,
-      }));
+      .map((mItem) => {
+        return {
+          comment_id: mItem.comment_id,
+          comment_content: mItem.comment_content,
+          comment_author_id: mItem.comment_author_id,
+          comment_author_email: mItem.comment_author_email,
+          comment_created_at: mItem.comment_created_at,
+          comment_updated_at: mItem.comment_updated_at,
+        };
+      })
+      .filter((c) => c.comment_id)
+      .sort(
+        (a, b) =>
+          Number(new Date(a.comment_created_at)) -
+          Number(new Date(b.comment_created_at))
+      );
   });
-  console.log("comments", comments);
-  console.log("checked", checked);
-  console.log("data", data);
   const resData = data.map((item, idx) => ({
     ...item,
     comments: comments[idx],
   }));
+
   console.log("resData", resData);
   res.send(resData);
 });
