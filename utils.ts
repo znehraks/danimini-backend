@@ -44,18 +44,15 @@ export const getVerifiedUser = async (req: Request) => {
   console.log("here1?");
   const { email } = jwt.verify(authorization, JWT_SECRET_KEY) as IJWTPayload;
 
-  const connection = await pool.getConnection();
-  const [id]: [TPartialUserRows[], FieldPacket[]] = await connection.execute(
+  const [id]: [TPartialUserRows[], FieldPacket[]] = await pool.query(
     `SELECT user_id FROM users WHERE user_email = '${email}'`
   );
   console.log("here2?");
   console.log("id", id);
   if (id.length === 0) {
-    connection.release();
     return null;
   }
 
   const { user_id } = id[0];
-  connection.release();
   return user_id;
 };

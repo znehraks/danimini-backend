@@ -56,35 +56,40 @@ const getAggregateInfoSQL = (id: string) => {
     SELECT COUNT(id) AS follower_count FROM follows
     WHERE following_id = '${id}';`;
 };
-
-router.get("/", verifyToken, async (req, res) => {
-  const connection = await pool.getConnection();
-  const [rows] = await connection.execute("SELECT * FROM users");
+router.get("/me", async (req, res) => {
+  const id = await getVerifiedUser(req);
+  if (!id) {
+    res.send({ errorCode: 0 });
+    return;
+  }
+  const [rows] = await pool.query(
+    `SELECT user_email FROM users where user_id = '${id}'`
+  );
   console.log(rows);
   res.send(rows);
 });
 
-router.get("/me", verifyToken, async (req, res) => {
-  const connection = await pool.getConnection();
+router.get("/", verifyToken, async (req, res) => {
+  const [rows] = await pool.query("SELECT * FROM users");
+  console.log(rows);
+  res.send(rows);
+});
 
+router.get("/profile/me", verifyToken, async (req, res) => {
   try {
     const id = await getVerifiedUser(req);
     if (!id) {
       res.send({ errorCode: 0 });
       return;
     }
-    const [rows] = await connection.query(getAggregateInfoSQL(id));
-
-    console.log("here?");
+    const [rows] = await pool.query(getAggregateInfoSQL(id));
 
     const data = {
       ...rows,
     };
-    console.log("here?2");
     res.send(data);
   } catch (e) {
     console.log("에러", e);
-    console.log("here?3 =================>");
     res.send({ errorCode: 1, message: e });
   }
 });
@@ -93,47 +98,35 @@ router.get("/:email", verifyToken, async (req, res) => {
   const {
     params: { email },
   } = req;
-  const connection = await pool.getConnection();
-
-  console.log("야긴가?");
 
   try {
-    const [targetId] = await connection.query(
+    const [targetId] = await pool.query(
       `SELECT user_id FROM users WHERE user_email = '${email}'`
     );
     console.log("targetId", targetId);
-    const [rows] = await connection.query(
+    const [rows] = await pool.query(
       getAggregateInfoSQL(
         (targetId as unknown as { user_id: string }[])[0].user_id
       )
     );
 
-    console.log("rows", rows);
-
-    console.log("here?");
-
     const data = {
       ...rows,
     };
-    console.log("here?2");
-    console.log("data", data);
     res.send(data);
-    connection.end();
   } catch (e) {
     console.log("에러", e);
-    console.log("here?3 =================>");
     res.send({ errorCode: 1, message: e });
   }
 });
 
 router.get("/following", verifyToken, async (req, res) => {
-  const connection = await pool.getConnection();
   const id = await getVerifiedUser(req);
   if (!id) {
     res.send({ errorCode: 0 });
     return;
   }
-  const [rows] = await connection.query(getAggregateInfoSQL(id));
+  const [rows] = await pool.query(getAggregateInfoSQL(id));
 
   const data = {
     ...rows,
@@ -143,13 +136,12 @@ router.get("/following", verifyToken, async (req, res) => {
 });
 
 router.get("/follower", verifyToken, async (req, res) => {
-  const connection = await pool.getConnection();
   const id = await getVerifiedUser(req);
   if (!id) {
     res.send({ errorCode: 0 });
     return;
   }
-  const [rows] = await connection.query(getAggregateInfoSQL(id));
+  const [rows] = await pool.query(getAggregateInfoSQL(id));
 
   const data = {
     ...rows,
@@ -162,9 +154,8 @@ router.post("/register", async (req, res) => {
   console.log(req.body);
   const { email, password: rawPassword } = req.body;
   // 아이디 중복 확인
-  const connection = await pool.getConnection();
   const [alreadyExistUsers]: [TEntierUserRows[], FieldPacket[]] =
-    await connection.execute(
+    await pool.query(
       `SELECT user_email FROM users where user_email='${email}'`
     );
 
@@ -180,7 +171,7 @@ router.post("/register", async (req, res) => {
   console.log(email, rawPassword, password);
 
   try {
-    const [rows] = await connection.execute(
+    const [rows] = await pool.query(
       `INSERT INTO users(user_id, user_email, user_password) VALUES ('${uuid()}', '${email}', '${password}')`
     );
     res.send(rows);
@@ -193,13 +184,11 @@ router.post("/register", async (req, res) => {
 
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
-  const connection = await pool.getConnection();
   try {
     // 아이디 확인
-    const [dbUser]: [TEntierUserRows[], FieldPacket[]] =
-      await connection.execute(
-        `SELECT user_email, user_password from users WHERE user_email='${email}'`
-      );
+    const [dbUser]: [TEntierUserRows[], FieldPacket[]] = await pool.query(
+      `SELECT user_email, user_password from users WHERE user_email='${email}'`
+    );
     if (!dbUser) {
       res.send({ errorCode: 1, message: "email is not exist" });
       return;

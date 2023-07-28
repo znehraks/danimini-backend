@@ -5,16 +5,14 @@ import { uuid } from "uuidv4";
 import { getVerifiedUser, verifyToken } from "../utils";
 
 router.get("/", verifyToken, async (req, res) => {
-  const connection = await pool.getConnection();
-  const [rows] = await connection.execute("SELECT * FROM todos");
+  const [rows] = await pool.query("SELECT * FROM todos");
   console.log(rows);
   res.send(rows);
 });
 
 router.get("/me", verifyToken, async (req, res) => {
-  const connection = await pool.getConnection();
   const id = await getVerifiedUser(req);
-  const [rows] = await connection.execute(
+  const [rows] = await pool.query(
     `SELECT * FROM todos WHERE author_id='${id}'`
   );
   console.log(rows);
@@ -22,9 +20,8 @@ router.get("/me", verifyToken, async (req, res) => {
 });
 
 router.get("/following", verifyToken, async (req, res) => {
-  const connection = await pool.getConnection();
   const id = await getVerifiedUser(req);
-  const [rows] = await connection.execute(
+  const [rows] = await pool.query(
     `SELECT * FROM todos 
         WHERE author_id = '${id}'
         OR(
@@ -40,14 +37,14 @@ router.post("/", verifyToken, async (req, res) => {
   const {
     body: { todo_title, todo_desc, todo_point },
   } = req;
-  const connection = await pool.getConnection();
+
   const id = await getVerifiedUser(req);
   if (!id) {
     res.send({ errorCode: 0 });
     return;
   }
   try {
-    const [rows] = await connection.execute(`INSERT INTO todos(
+    const [rows] = await pool.query(`INSERT INTO todos(
     todo_id, todo_title, todo_desc, todo_point, author_id
     ) VALUES (
         '${uuid()}','${todo_title}','${todo_desc}', '${todo_point}', '${id}'

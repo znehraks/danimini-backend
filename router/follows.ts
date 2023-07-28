@@ -8,8 +8,7 @@ import { getVerifiedUser, verifyToken } from "../utils";
 dotenv.config({ path: `${path.resolve()}/.env` });
 
 router.get("/", verifyToken, async (req, res) => {
-  const connection = await pool.getConnection();
-  const [rows] = await connection.execute("SELECT * FROM follows");
+  const [rows] = await pool.query("SELECT * FROM follows");
   console.log(rows);
   res.send(rows);
 });
@@ -23,9 +22,9 @@ router.post("/", verifyToken, async (req, res) => {
     res.send({ errorCode: 0 });
     return;
   }
-  const connection = await pool.getConnection();
+
   try {
-    const [rows] = await connection.execute(`INSERT INTO follows (
+    const [rows] = await pool.query(`INSERT INTO follows (
       id, follower_id, following_id
     ) VALUES (
       '${uuid()}',
@@ -50,9 +49,8 @@ router.delete("/", verifyToken, async (req, res) => {
     res.send({ errorCode: 0 });
     return;
   }
-  const connection = await pool.getConnection();
   try {
-    const [rows] = await connection.execute(`DELETE FROM follows WHERE 
+    const [rows] = await pool.query(`DELETE FROM follows WHERE 
     follower_id = '${id}' AND following_id = '${following_id}'
     `);
 
